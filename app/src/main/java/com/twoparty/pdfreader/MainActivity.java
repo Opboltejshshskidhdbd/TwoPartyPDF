@@ -8,8 +8,12 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.OpenableColumns;
+import android.text.TextUtils;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.EditText;
+import android.widget.TextView;
+import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -56,36 +60,80 @@ public class MainActivity extends AppCompatActivity {
         updateUI();
     }
 
+    // --- CLEAN CUSTOM OPTIONS DIALOG (NO MORE PX/SP CRASH) ---
     public void showOptionsDialog(StudyItem item) {
-        String[] options = {"Rename ✍️", "Delete 🗑️"};
-        new AlertDialog.Builder(this).setItems(options, (dialog, which) -> {
-            if (which == 0) showRenameDialog(item);
-            else showDeleteConfirm(item.id);
-        }).show();
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_options, null);
+        builder.setView(dialogView);
+
+        AlertDialog dialog = builder.create();
+
+        TextView title = dialogView.findViewById(R.id.dialogTitle);
+        TextView btnRename = dialogView.findViewById(R.id.btnRename);
+        TextView btnDelete = dialogView.findViewById(R.id.btnDelete);
+
+        title.setText(item.name);
+
+        btnRename.setOnClickListener(v -> {
+            dialog.dismiss();
+            showRenameDialog(item);
+        });
+
+        btnDelete.setOnClickListener(v -> {
+            dialog.dismiss();
+            showDeleteConfirm(item.id);
+        });
+
+        dialog.show();
     }
 
+    // --- FIXED RENAME WITH VALIDATION & XML PADDING ---
     private void showRenameDialog(StudyItem item) {
-        final EditText input = new EditText(this);
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("✏️ Rename Item");
+
+        View view = LayoutInflater.from(this).inflate(R.layout.dialog_input, null);
+        final EditText input = view.findViewById(R.id.dialogEditText);
         input.setText(item.name);
-        new AlertDialog.Builder(this).setTitle("Rename Item").setView(input)
-            .setPositiveButton("Save", (d, w) -> {
-                dbHelper.updateItemName(item.id, input.getText().toString());
+        input.setHint("Enter new name...");
+        builder.setView(view);
+
+        builder.setPositiveButton("Save", (d, w) -> {
+            String newName = input.getText().toString().trim();
+            if (TextUtils.isEmpty(newName)) {
+                Toast.makeText(MainActivity.this, "Name cannot be empty! ❌", Toast.LENGTH_SHORT).show();
+            } else {
+                dbHelper.updateItemName(item.id, newName);
                 updateUI();
-            }).show();
+                Toast.makeText(MainActivity.this, "Renamed successfully! 👍", Toast.LENGTH_SHORT).show();
+            }
+        });
+        builder.setNegativeButton("Cancel", null);
+        builder.show();
     }
 
     private void showDeleteConfirm(int id) {
-        new AlertDialog.Builder(this).setMessage("Delete?").setPositiveButton("Yes", (d, w) -> {
-            dbHelper.deleteItem(id);
-            updateUI();
-        }).show();
+        new AlertDialog.Builder(this)
+            .setTitle("⚠️ Delete Confirmation")
+            .setMessage("Kya aap sach me isko delete karna chahte hain?")
+            .setPositiveButton("Yes, Delete", (d, w) -> {
+                dbHelper.deleteItem(id);
+                updateUI();
+                Toast.makeText(MainActivity.this, "Item Deleted! 🗑️", Toast.LENGTH_SHORT).show();
+            })
+            .setNegativeButton("No", null)
+            .show();
     }
 
+    // --- MODERN ACTION CHOICE DIALOG ---
     private void showAddOptionsDialog() {
-        String[] opts = {"Naya Folder 📁", "PDF Add Karein 📚"};
-        new AlertDialog.Builder(this).setItems(opts, (dialog, id) -> {
-            if (id == 0) showCreateFolderDialog(); else openFilePicker();
-        }).show();
+        String[] opts = {"📁  Naya Folder Banayein", "📚  Nayi PDF Add Karein"};
+        new AlertDialog.Builder(this)
+            .setTitle("➕ Add to Library")
+            .setItems(opts, (dialog, id) -> {
+                if (id == 0) showCreateFolderDialog(); 
+                else openFilePicker();
+            }).show();
     }
 
     private void openFilePicker() {
@@ -95,13 +143,28 @@ public class MainActivity extends AppCompatActivity {
         startActivityForResult(intent, PICK_PDF_FILE);
     }
 
+    // --- FIXED FOLDER CREATION WITH XML PADDING ---
     private void showCreateFolderDialog() {
-        final EditText input = new EditText(this);
-        new AlertDialog.Builder(this).setTitle("Folder Name").setView(input)
-            .setPositiveButton("OK", (d, w) -> {
-                dbHelper.insertItem(input.getText().toString(), null, currentFolderId);
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("📁 New Folder");
+
+        View view = LayoutInflater.from(this).inflate(R.layout.dialog_input, null);
+        final EditText input = view.findViewById(R.id.dialogEditText);
+        input.setHint("Folder ka naam likhein...");
+        builder.setView(view);
+
+        builder.setPositiveButton("Create", (d, w) -> {
+            String folderName = input.getText().toString().trim();
+            if (TextUtils.isEmpty(folderName)) {
+                Toast.makeText(MainActivity.this, "Khaali folder nahi ban sakta! ❌", Toast.LENGTH_LONG).show();
+            } else {
+                dbHelper.insertItem(folderName, null, currentFolderId);
                 updateUI();
-            }).show();
+                Toast.makeText(MainActivity.this, "Folder ready! 🚀", Toast.LENGTH_SHORT).show();
+            }
+        });
+        builder.setNegativeButton("Cancel", null);
+        builder.show();
     }
 
     public void openFolder(int id, String name) {
